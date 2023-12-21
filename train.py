@@ -32,7 +32,7 @@ if __name__ == '__main__':
                         help="The learning rate to use for training.")
     parser.add_argument("--batch_size", type=int, default=64, 
                         help="Size of mini-batches for SGD.")
-    parser.add_argument("--latent_dim", type=int, default=16, 
+    parser.add_argument("--latent_dim", type=int, default=4, 
                         help="Latent space dimension.")
     parser.add_argument("--g_hidden_dim", type=int, default=64, 
                         help="Impacts generator number of parameters.")

@@ -11,11 +11,11 @@ class Generator(nn.Module):
         self.fc3 = nn.Linear(self.fc2.out_features, self.fc2.out_features*2)
         self.fc4 = nn.Linear(self.fc3.out_features, g_output_dim)
 
-        self.fc5 = nn.Linear(2*g_output_dim, g_output_dim)
+        # self.fc5 = nn.Linear(2*g_output_dim, g_output_dim)
 
     # forward method
     def forward(self, x):
-        z = x
+        # z = x
         x = F.leaky_relu(self.fc1(x), 0.2)
         x = F.leaky_relu(self.fc2(x), 0.2)
         x = F.leaky_relu(self.fc3(x), 0.2)
