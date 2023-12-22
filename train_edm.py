@@ -15,6 +15,7 @@ from model import Generator, Discriminator
 from utils import D_train, G_train, save_models
 from utils import D_wasserstrain, G_wasserstrain, make_fake_data, plot_fake_data
 from utils import metrics_log, metrics_log_train, metrics_log_test
+from utils import ED_model_step
 
 from sklearn.model_selection import train_test_split
 
@@ -25,13 +26,13 @@ from sklearn.model_selection import train_test_split
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train Normalizing Flow.')
-    parser.add_argument("--epochs", type=int, default=100,
+    parser.add_argument("--epochs", type=int, default=1000,
                         help="Number of epochs for training.")
     parser.add_argument("--lr", type=float, default=0.002,
                         help="The learning rate to use for training.")
     parser.add_argument("--batch_size", type=int, default=64, 
                         help="Size of mini-batches for SGD.")
-    parser.add_argument("--latent_dim", type=int, default=16, 
+    parser.add_argument("--latent_dim", type=int, default=4, 
                         help="Latent space dimension.")
     parser.add_argument("--g_hidden_dim", type=int, default=64, 
                         help="Impacts generator number of parameters.")
@@ -48,6 +49,9 @@ if __name__ == '__main__':
     os.makedirs('checkpoints', exist_ok=True)
     os.makedirs('data', exist_ok=True)
 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print("device", device)
+
     # Data Pipeline
     print('Dataset loading...')
 
@@ -56,8 +60,8 @@ if __name__ == '__main__':
 
     data_train, data_test = train_test_split(data, test_size=0.2)
 
-    train = torch.tensor(data_train.values.astype(np.float32))
-    test = torch.tensor(data_test.values.astype(np.float32))
+    train = torch.tensor(data_train.values.astype(np.float32)).to(device)
+    test = torch.tensor(data_test.values.astype(np.float32)).to(device)
 
     # standardize
     means = train.mean(dim=0, keepdim=True)
@@ -75,8 +79,6 @@ if __name__ == '__main__':
 
 
     print('Model Loading...')
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print("device", device)
 
     dim=4
     G = torch.nn.DataParallel(Generator(latent_dim=args.latent_dim, g_hidden_dim=args.g_hidden_dim, g_output_dim=dim)).to(device)
@@ -88,7 +90,7 @@ if __name__ == '__main__':
     writer = SummaryWriter(log_dir=f"tb_logs/{args.version}", purge_step=0)
 
     # define loss
-    criterion = nn.BCELoss() 
+    criterion = nn.BCELoss()
 
     # define optimizers
     G_optimizer = optim.RMSprop(G.parameters(), lr=args.lr)
@@ -100,21 +102,33 @@ if __name__ == '__main__':
     for epoch in range(1, n_epoch + 1):
         with tqdm(enumerate(train_loader), total=len(train_loader),
                   leave=False, desc=f"Epoch {epoch}") as pbar:
+            # for batch_idx, (x, _) in pbar:
             for batch_idx, x in pbar:
+                # print(x)
                 log = (writer, batch_idx, epoch, len(train_loader))
-                x = x[0]
-                D_wasserstrain(args.latent_dim, x, G, D, D_optimizer, device, args.latent_distr, log=log)
-                if batch_idx % 5 == 0:
-                    G_wasserstrain(args.latent_dim, x, G, D, G_optimizer, device, args.latent_distr, log=log)
 
-            if epoch % 100 == 0:
+                # print(batch_idx)
+
+                # x = x.view(-1, dim)
+                # x = x[0]
+                # D_wasserstrain(args.latent_dim, x, G, D, D_optimizer, device, args.latent_distr, log=log)
+                # if batch_idx % 5 == 0:
+                #     G_wasserstrain(args.latent_dim, x, G, D, G_optimizer, device, args.latent_distr, log=log)
+
+                ############################################
+                # ED-GAN:
+                x=x[0]
+                ED_model_step(args.latent_dim, x, G, G_optimizer, device, args.latent_distr, log=log)
+
+                ############################################
+
+            if epoch % 200 == 0:
                 save_models(G, D, 'checkpoints')
-
+                
                 # plot fake data ecdf
                 fake_data = make_fake_data(args.latent_distr, data.shape[0], args.latent_dim, G, means, stds)
                 plot_fake_data(fake_data, log)
 
-                # compute metrics for train and test
                 fake_data_train = make_fake_data(args.latent_distr, data_train.shape[0], args.latent_dim, G, means, stds)
                 fake_data_test = make_fake_data(args.latent_distr, data_test.shape[0], args.latent_dim, G, means, stds)
                 metrics_log_train(data_train, fake_data_train, log=log)
@@ -122,5 +136,6 @@ if __name__ == '__main__':
                 
     print('Training done')
 
+    # plot_fake_data(data.shape[0], args.latent_dim, G_wasserstrain)
+
     writer.close()
-        

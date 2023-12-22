@@ -13,15 +13,14 @@ class Generator(nn.Module):
 
         self.fc5 = nn.Linear(2*g_output_dim, g_output_dim)
 
-    # # forward method
-    # def forward(self, x):
-    #     z = x
-    #     x = F.leaky_relu(self.fc1(x), 0.2)
-    #     x = F.leaky_relu(self.fc2(x), 0.2)
-    #     x = F.leaky_relu(self.fc3(x), 0.2)
-    #     return self.fc4(x)
+    # forward method
+    def forward(self, x):
+        x = F.leaky_relu(self.fc1(x), 0.2)
+        x = F.leaky_relu(self.fc2(x), 0.2)
+        x = F.leaky_relu(self.fc3(x), 0.2)
+        return self.fc4(x)
 
-    # # forward method - pure evgan
+    # # forward method - evgan
     # def forward(self, x):
     #     z = x
     #     x = F.leaky_relu(self.fc1(x), 0.2)
@@ -31,16 +30,16 @@ class Generator(nn.Module):
     #     x = F.relu(self.fc4(x))
     #     return torch.stack([H(z[:, i], x[:, i]) for i in range(x.shape[1])]).t()
         
-    # forward method - mixed
-    def forward(self, x):
-        z = x
-        x = F.leaky_relu(self.fc1(x), 0.2)
-        x = F.leaky_relu(self.fc2(x), 0.2)
-        x = F.leaky_relu(self.fc3(x), 0.2)
-        # enforce positivity on x for H, and dimensionality up to z
-        x = self.fc4(x)
-        x = torch.concat([torch.stack([H(z[:, i], F.relu(x)[:, i]) for i in range(x.shape[1])]).t(), x], axis=1)
-        return self.fc5(x)
+    # # forward method - mixed
+    # def forward(self, x):
+    #     z = x
+    #     x = F.leaky_relu(self.fc1(x), 0.2)
+    #     x = F.leaky_relu(self.fc2(x), 0.2)
+    #     x = F.leaky_relu(self.fc3(x), 0.2)
+    #     # enforce positivity on x for H, and dimensionality up to z
+    #     x = self.fc4(x)
+    #     x = torch.concat([torch.stack([H(z[:, i], F.relu(x)[:, i]) for i in range(x.shape[1])]).t(), x], axis=1)
+    #     return self.fc5(x)
 
 class Discriminator(nn.Module):
     def __init__(self, d_input_dim, d_hidden_dim):

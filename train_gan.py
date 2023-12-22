@@ -48,6 +48,9 @@ if __name__ == '__main__':
     os.makedirs('checkpoints', exist_ok=True)
     os.makedirs('data', exist_ok=True)
 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print("device", device)
+
     # Data Pipeline
     print('Dataset loading...')
 
@@ -72,7 +75,6 @@ if __name__ == '__main__':
     test_loader = data_utils.DataLoader(dataset = test_dataset, batch_size = args.batch_size, shuffle = True)
 
     print('Dataset Loaded.')
-
 
     print('Model Loading...')
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -100,21 +102,20 @@ if __name__ == '__main__':
     for epoch in range(1, n_epoch + 1):
         with tqdm(enumerate(train_loader), total=len(train_loader),
                   leave=False, desc=f"Epoch {epoch}") as pbar:
+            # for batch_idx, (x, _) in pbar:
             for batch_idx, x in pbar:
                 log = (writer, batch_idx, epoch, len(train_loader))
                 x = x[0]
-                D_wasserstrain(args.latent_dim, x, G, D, D_optimizer, device, args.latent_distr, log=log)
-                if batch_idx % 5 == 0:
-                    G_wasserstrain(args.latent_dim, x, G, D, G_optimizer, device, args.latent_distr, log=log)
+                D_train(args.latent_dim, x, G, D, D_optimizer, device, args.latent_distr, log=log)
+                G_train(args.latent_dim, x, G, D, G_optimizer, device, args.latent_distr, log=log)
 
             if epoch % 100 == 0:
                 save_models(G, D, 'checkpoints')
-
+                
                 # plot fake data ecdf
                 fake_data = make_fake_data(args.latent_distr, data.shape[0], args.latent_dim, G, means, stds)
                 plot_fake_data(fake_data, log)
 
-                # compute metrics for train and test
                 fake_data_train = make_fake_data(args.latent_distr, data_train.shape[0], args.latent_dim, G, means, stds)
                 fake_data_test = make_fake_data(args.latent_distr, data_test.shape[0], args.latent_dim, G, means, stds)
                 metrics_log_train(data_train, fake_data_train, log=log)
