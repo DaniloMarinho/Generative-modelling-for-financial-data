@@ -4,6 +4,7 @@ import os
 from scipy import stats
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
+import pandas as pd
 
 # changes: added tensorboard support
 
@@ -72,7 +73,7 @@ def sample_from(distr, n_samples, latent_dim, device):
     elif distr == "uniform":
         return torch.rand(n_samples, latent_dim)
 
-def D_wasserstrain(latent_dim, x, G, D, D_optimizer, device, distr="normal", log=None):
+def D_wasserstrain(latent_dim, x, G, D, D_optimizer, device, distr="normal", log=None, a=0.9, b=1.1):
     # =======================Train the discriminator=======================#
     D.zero_grad()
 
@@ -80,7 +81,6 @@ def D_wasserstrain(latent_dim, x, G, D, D_optimizer, device, distr="normal", log
     x_real = x
     x_real = x_real.to(device)
 
-    D_output_real = D(x_real)
     # D_real_score = D_output_real
 
     # train discriminator on fake
@@ -88,11 +88,23 @@ def D_wasserstrain(latent_dim, x, G, D, D_optimizer, device, distr="normal", log
     z = sample_from(distr, x.shape[0], latent_dim, device)
     x_fake = G(z)
 
-    D_output_fake = D(x_fake)
+    x_fake_std, x_fake_xtr = split_std_xtr(x_fake)
+    x_real_std, x_real_xtr = split_std_xtr(x_real)
+
+    D_output_fake_std = D(x_fake_std)
+    D_output_fake_xtr = D(x_fake_xtr)
+
+    x_real_std = x_real_std.to(device)
+    x_real_xtr = x_real_xtr.to(device)
+    
+    D_output_real_std = D(x_real_std)
+    D_output_real_xtr = D(x_real_xtr)
+    D_loss_std = a*(D_output_real_std.mean() - D_output_fake_std.mean())
+    D_loss_xtr = b*(D_output_real_xtr.mean() - D_output_fake_xtr.mean())
     # D_fake_score = D_output_fake
 
     # gradient backprop & optimize ONLY D's parameters
-    D_loss = (D_output_real - D_output_fake).mean()
+    D_loss = D_loss_std + D_loss_xtr
     D_loss.backward()
     D_optimizer.step()
 
@@ -100,13 +112,22 @@ def D_wasserstrain(latent_dim, x, G, D, D_optimizer, device, distr="normal", log
         p.data = torch.clamp(p.data, -0.01, 0.01)
 
     # log to tensorboard
-    if log is not None:
-        discriminator_log(log, D_output_real.mean(), D_output_fake.mean(), D_loss)
+    # if log is not None:
+    #     discriminator_log(log, D_output_real.mean(), D_output_fake.mean(), D_loss)
 
     return D_loss.data.item()
 
+def split_std_xtr(x, alpha=0.95):
+    quantiles1 = torch.quantile(x[:,0], alpha, interpolation="lower")
+    quantiles2 = torch.quantile(x[:,1], alpha, interpolation="lower")
+    quantiles3 = torch.quantile(x[:,2], alpha, interpolation="lower")
+    quantiles4 = torch.quantile(x[:,3], alpha, interpolation="lower")
+    data_extreme = x[(x[:,0]>=quantiles1) | (x[:,1]>=quantiles2) | (x[:,2]>=quantiles3) | (x[:,3]>=quantiles4), :]
+    data_std = x[~((x[:,0]>=quantiles1) | (x[:, 1]>=quantiles2) | (x[:,2]>=quantiles3) | (x[:,3]>=quantiles4)), :]
+    return torch.tensor(data_std), torch.tensor(data_extreme)
 
-def G_wasserstrain(latent_dim, x, G, D, G_optimizer, device, distr="normal", log=None):
+
+def G_wasserstrain(latent_dim, x, G, D, G_optimizer, device, distr="normal", log=None, a=0.9, b=1.1):
     # =======================Train the generator=======================#
     G.zero_grad()
 
@@ -116,9 +137,11 @@ def G_wasserstrain(latent_dim, x, G, D, G_optimizer, device, distr="normal", log
     # y = torch.ones(x.shape[0], 1).to(device)
 
     G_output = G(z)
-    D_output = D(G_output)
+    G_output_std, G_output_xtr = split_std_xtr(G_output)
+    D_output_std = D(G_output_std)
+    D_output_xtr = D(G_output_xtr)
     #G_loss = criterion(D_output, y)
-    G_loss = - D_output.mean()
+    G_loss = - a*D_output_std.mean() - b*D_output_xtr.mean()
 
     # gradient backprop & optimize ONLY G's parameters
     G_loss.backward()

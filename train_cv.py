@@ -133,15 +133,15 @@ if __name__ == '__main__':
                     # print(batch_idx)
 
                     # x = x.view(-1, dim)
-                    # x = x[0]
-                    # D_wasserstrain(args.latent_dim, x, G, D, D_optimizer, device, args.latent_distr, log=log)
-                    # if batch_idx % 5 == 0:
-                    #     G_wasserstrain(args.latent_dim, x, G, D, G_optimizer, device, args.latent_distr, log=log)
+                    x = x[0]
+                    D_wasserstrain(args.latent_dim, x, G, D, D_optimizer, device, args.latent_distr, log=log)
+                    if batch_idx % 5 == 0:
+                        G_wasserstrain(args.latent_dim, x, G, D, G_optimizer, device, args.latent_distr, log=log)
 
                     ############################################
                     # ED-GAN:
-                    x=x[0]
-                    ED_model_step(args.latent_dim, x, G, G_optimizer, device, args.latent_distr, log=log)
+                    # x=x[0]
+                    # ED_model_step(args.latent_dim, x, G, G_optimizer, device, args.latent_distr, log=log)
                     ############################################
 
                 if epoch % 100 == 0:
