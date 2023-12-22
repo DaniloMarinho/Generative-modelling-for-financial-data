@@ -15,6 +15,7 @@ from model import Generator, Discriminator
 from utils import D_train, G_train, save_models
 from utils import D_wasserstrain, G_wasserstrain, make_fake_data, plot_fake_data
 from utils import metrics_log, metrics_log_train, metrics_log_test
+from utils import ED_model_step
 
 from sklearn.model_selection import train_test_split
 
@@ -25,13 +26,13 @@ from sklearn.model_selection import train_test_split
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train Normalizing Flow.')
-    parser.add_argument("--epochs", type=int, default=100,
+    parser.add_argument("--epochs", type=int, default=6000,
                         help="Number of epochs for training.")
     parser.add_argument("--lr", type=float, default=0.002,
                         help="The learning rate to use for training.")
     parser.add_argument("--batch_size", type=int, default=64, 
                         help="Size of mini-batches for SGD.")
-    parser.add_argument("--latent_dim", type=int, default=16, 
+    parser.add_argument("--latent_dim", type=int, default=4, 
                         help="Latent space dimension.")
     parser.add_argument("--g_hidden_dim", type=int, default=64, 
                         help="Impacts generator number of parameters.")
@@ -97,7 +98,7 @@ if __name__ == '__main__':
     writer = SummaryWriter(log_dir=f"tb_logs/{args.version}", purge_step=0)
 
     # define loss
-    criterion = nn.BCELoss() 
+    criterion = nn.BCELoss()
 
     # define optimizers
     G_optimizer = optim.RMSprop(G.parameters(), lr=args.lr)
@@ -117,12 +118,19 @@ if __name__ == '__main__':
                 # print(batch_idx)
 
                 # x = x.view(-1, dim)
-                x = x[0]
-                D_wasserstrain(args.latent_dim, x, G, D, D_optimizer, device, args.latent_distr, log=log)
-                if batch_idx % 5 == 0:
-                    G_wasserstrain(args.latent_dim, x, G, D, G_optimizer, device, args.latent_distr, log=log)
+                # x = x[0]
+                # D_wasserstrain(args.latent_dim, x, G, D, D_optimizer, device, args.latent_distr, log=log)
+                # if batch_idx % 5 == 0:
+                #     G_wasserstrain(args.latent_dim, x, G, D, G_optimizer, device, args.latent_distr, log=log)
 
-            if epoch % 100 == 0:
+                ############################################
+                # ED-GAN:
+                x=x[0]
+                ED_model_step(args.latent_dim, x, G, G_optimizer, device, args.latent_distr, log=log)
+
+                ############################################
+
+            if epoch % 20 == 0:
                 save_models(G, D, 'checkpoints')
                 # plot_fake_data(data.shape[0], args.latent_dim, G, means, stds)
 

@@ -3,6 +3,7 @@ import numpy as np
 import os
 from scipy import stats
 import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
 
 # changes: added tensorboard support
 
@@ -128,6 +129,147 @@ def G_wasserstrain(latent_dim, x, G, D, G_optimizer, device, distr="normal", log
         generator_log(log, x, G_output, G_loss)
 
     return G_loss.data.item()
+
+###################################################################
+# Attempt at Energy Distance model
+def ED_model_step(latent_dim, x, G, G_optimizer, device, distr="normal", log=None):
+
+    G.zero_grad()
+
+    z = sample_from(distr, x.shape[0], latent_dim, device)
+    
+    G_output = G(z)
+    
+    #G_loss=energy_distance_same_length(x, G_output)
+    G_loss1 = energy_distance1(x, G_output)
+    #G_loss2 = energy_distance2(x, G_output)
+#####################################
+    # x_reshaped = x.view((x.shape[0], 1, x.shape[1]))
+    # out_reshaped = G_output.view((1, G_output.shape[0], G_output.shape[1]))
+
+    # normsA = torch.linalg.norm(x_reshaped - out_reshaped, axis=2) 
+    # A = torch.sum(normsA)
+    # normsB = torch.linalg.norm(x_reshaped - x_reshaped, axis=2) 
+    # B = torch.sum(normsB)
+    # normsC = torch.linalg.norm(out_reshaped - out_reshaped, axis=2) 
+    # C = torch.sum(normsC)
+
+    # n=x.shape[0]
+    # m=G_output.shape[0]
+    # G_loss = 2*A/(n*m) - C/(m**2)  - B/(n**2) 
+#####################################
+    #verify(G, G_loss1, G_loss2)
+
+    G_loss1.backward()
+
+    G_optimizer.step()
+
+    if log is not None:
+        generator_log(log, x, G_output, G_loss1)
+
+    return G_loss1.data.item()
+
+def verify(G, l1, l2):
+
+    if torch.abs(l1-l2)>10**(-6): 
+        print("Losses don't match")
+        print(f"{l1} vs {l2}")
+
+    l1.backward(retain_graph=True)
+
+    A=[]
+
+    for n ,p in G.named_parameters():
+        A.append(p.grad)
+        
+    G.zero_grad()
+
+    l2.backward()
+
+    B=[]
+
+    for p in G.parameters():
+        B.append(p.grad)
+
+    for i in range(len(A)):
+        equal=True
+        if np.linalg.norm(A[i] - B[i], np.inf) > 10**(-6):
+            equal = False
+
+    if (not equal): print("Gradients don't match")
+
+    return    
+
+def energy_distance2(x, y):
+    n = x.shape[0]
+    m = y.shape[0]
+
+    A = torch.tensor([0.], requires_grad=True)
+    for i in range(n):
+        for j in range(m):
+            A = A + torch.linalg.norm(x[i,:]-y[j,:])
+
+    # print(f"A for l2 {A}")
+    B = torch.tensor([0.], requires_grad=True)
+    for i in range(n):
+        for j in range(n):
+            B = B + torch.linalg.norm(x[i,:] - x[j,:])
+    # print(f"B for l2 {B}")
+
+    C = torch.tensor([0.], requires_grad=True)
+    for i in range(m):
+        for j in range(m):
+            C = C + torch.linalg.norm(y[i,:] - y[j,:])
+    # print(f"C for l2 {C}")
+
+    result = 2*A/(n*m) - C/(m**2)  - B/(n**2) 
+    return result
+
+
+def energy_distance1(x, y):
+    n=x.shape[0]
+    m=y.shape[0]
+
+    # A = torch.tensor([0.], requires_grad=True)
+    # for i in range(n):
+    #     for j in range(m):
+    #         A = A + torch.linalg.norm(x[i,:]-y[j,:])
+    # B = torch.tensor([0.], requires_grad=True)
+    # for i in range(n):
+    #     for j in range(n):
+    #         B = B + torch.linalg.norm(x[i,:] - x[j,:])
+    # C = torch.tensor([0.], requires_grad=True)
+    # for i in range(m):
+    #     for j in range(m):
+    #         C = C + torch.linalg.norm(y[i,:] - y[j,:])
+
+    # x_reshaped = torch.tensor(x[:, None, :], requires_grad=True)
+    # y_reshaped = torch.tensor(y[None, :, :], requires_grad=True)
+    x_reshaped1 = torch.unsqueeze(x, 1)
+    y_reshaped2 = torch.unsqueeze(y, 0)
+    x_reshaped2 = torch.unsqueeze(x, 0)
+    y_reshaped1 = torch.unsqueeze(y, 1)
+    # x_reshaped = torch.reshape(x, (x.shape[0], 1, x.shape[1]))
+    # y_reshaped = torch.reshape(y, (1, y.shape[0], y.shape[1]))
+
+    # x_reshaped = x.view((x.shape[0], 1, x.shape[1]))
+    # y_reshaped = y.view((1, y.shape[0], y.shape[1])) 
+    
+    normsA = torch.linalg.norm(x_reshaped1 - y_reshaped2, axis=2) 
+    A = torch.sum(normsA)
+    normsB = torch.linalg.norm(x_reshaped1 - x_reshaped2, axis=2) 
+    B = torch.sum(normsB) 
+    normsC = torch.linalg.norm(y_reshaped1 - y_reshaped2, axis=2) 
+    C = torch.sum(normsC)
+
+    # print(f"\nA for l1 {A}")
+    # print(f"B for l1 {B}")
+    # print(f"C for l1 {C}")
+
+
+    result = 2*A/(n*m) - C/(m**2)  - B/(n**2) 
+    return result
+###################################################################
 
 
 def save_models(G, D, folder):
@@ -298,7 +440,7 @@ def pseudo_obs(x):
 def Absolute_Kendall_error(X_og, X_gen):
     Z_og=pseudo_obs(np.array(X_og))
     Z_gen=pseudo_obs(np.array(X_gen))
-    return np.linalg.norm(np.sort(Z_og)-np.sort(Z_gen), 1)
+    return np.linalg.norm(np.sort(Z_og)-np.sort(Z_gen), 1)/X_og.shape[0]
 
 # def H(u, y):
 #     return -torch.log(y)/(torch.log(1 - u**2) - torch.log(2))
