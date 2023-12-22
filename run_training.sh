@@ -16,6 +16,7 @@ for latent_dim in "${latent_dims[@]}"; do
         # Run the Python command
         python3 train.py --epochs 4000 --lr $lr --latent_dim $latent_dim \
           --g_hidden_dim $g_hidden_dim --d_hidden_dim $d_hidden_dim --version "$version"
+      done
     done
   done
 done
